@@ -143,9 +143,9 @@ class Viddler():
 
     def downloadVideo(self, video):
         """Download a video from a json object"""
-        self.makePublic(video['id'])
         for _file in video['files']:
-            if _file['profile_name'] == "Source":
+            if _file['profile_name'] == "Source" and _file['status']=='ready':
+                self.makePublic(video['id'])
                 dest = os.path.join(self.save_dir, video['id']+'.'+_file['ext'])
                 try:
                     result = requests.get(_file['url'], stream=True)

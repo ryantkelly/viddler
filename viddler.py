@@ -17,7 +17,6 @@ class Viddler():
         if not os.path.isdir(self.save_dir):
             os.makedirs(self.save_dir)
 
-
         if os.path.isfile(self.auth_file):
             self.auth = json.load(open(self.auth_file))
         else:
@@ -166,6 +165,24 @@ class Viddler():
                 self.writeProgress(video['id'], 'complete')
                 return True
     
+    def downloadThumb(self, video):
+        """Download thumbnail image for the video"""
+        thumb_dir = os.path.join(self.save_dir, 'thumbs')
+        if not os.path.isdir(thumb_dir):
+            os.makedirs(thumb_dir)
+        
+        dest = os.path.join(thumb_dir, video['id']+'.jpg')
+        try:
+            result = requests.get(video["thumbnail_url"])
+        except:
+            raise
+        try:
+            result.raise_for_status()
+        except requests.exceptions.HTTPError:
+            self.authenticate()
+        with open(dest, 'wb') as f:
+            f.write(result.content)
+
     def saveVideoMeta(self, video):
         """Write some video meta data to a .csv"""
         dest = os.path.join(self.save_dir, self.meta_file)
@@ -181,3 +198,6 @@ class Viddler():
         with open(dest, 'a') as f:
             writer = csv.writer(f)
             writer.writerow([video['id'], self.save_dir, video['id']+'.'+_file['ext'], video['title'], video['description'], pub, video['view_count'], video['impression_count']])
+
+    def makeWebpage(self):
+        """Make a web page to browse downloaded videos"""

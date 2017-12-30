@@ -46,12 +46,12 @@ class Viddler():
         
         
     def saveJson(self, _file, _dict):
-        """Function to write json"""
+        """Function to write dict to json"""
         with open(_file, 'w') as f:
             f.write(json.dumps(_dict))
 
     def getVideos(self):
-        """Gets all videos for account, and writes to videos.json"""
+        """Gets all videos for account, and write to videos.json for caching purposes"""
         f = open(self.video_file, 'w')
         _list = []
         params = {
@@ -82,7 +82,7 @@ class Viddler():
         return json.load(open(self.video_file))
 
     def makePublic(self, _id):
-        """Make a video publically downlodable"""
+        """Make a video publically downloadable"""
         params = {
             'sessionid': self.auth['auth']['sessionid'],
             'api_key': self.api_key,
@@ -100,7 +100,7 @@ class Viddler():
             self.authenticate()
 
     def makePrivate(self, _id):
-        """Make video private again"""
+        """Make video not publically downloadable"""
         params = {
             'sessionid': self.auth['auth']['sessionid'],
             'api_key': self.api_key,
@@ -155,17 +155,17 @@ class Viddler():
                 return True
     
     def saveVideoMeta(self, video):
+        """Write some video meta data to a .csv"""
         dest = os.path.join(self.save_dir, self.meta_file)
         if not os.path.isfile(dest):
             with open(dest, 'w') as f:
                 writer = csv.writer(f)
                 writer.writerow(['Video ID', 'Directory', 'Filename', 'Title', 'Description', 'Published', 'View Count','Impression Count'])
         
-        directory = 'videos'
         for _file in video['files']:
             if _file['profile_name'] == "Source":
                 break
         pub = datetime.datetime.fromtimestamp(int(video['made_public_time'])).strftime('%Y-%m-%d %H:%M:%S')
         with open(dest, 'a') as f:
             writer = csv.writer(f)
-            writer.writerow([video['id'], directory, video['id']+'.'+_file['ext'], video['title'], video['description'], pub, video['view_count'], video['impression_count']])
+            writer.writerow([video['id'], self.save_dir, video['id']+'.'+_file['ext'], video['title'], video['description'], pub, video['view_count'], video['impression_count']])

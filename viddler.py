@@ -1,6 +1,6 @@
 import requests, json, os, pprint, csv, datetime
 from furl import furl
-
+import sys
 class Viddler():
     viddler = "https://api.viddler.com/api/v2/"
     
@@ -129,6 +129,19 @@ class Viddler():
             with open(self.progress_file, 'w') as f:
                 d = [{_id: status}]
                 f.write(json.dumps(d))
+    
+    def loadComplete(self):
+        """Loads complete files into a list"""
+        try:
+            d = json.load(open(self.progress_file, 'r'))
+        except:
+            raise
+        l = []
+        for p in d:
+            print(list(p.keys())[0])
+            if list(p.values())[0]  == 'complete':
+                l.append(list(p.keys())[0])
+        return l
 
     def downloadVideo(self, video):
         """Download a video from a json object"""

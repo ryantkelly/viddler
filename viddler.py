@@ -138,7 +138,6 @@ class Viddler():
             raise
         l = []
         for p in d:
-            print(list(p.keys())[0])
             if list(p.values())[0]  == 'complete':
                 l.append(list(p.keys())[0])
         return l

@@ -144,26 +144,29 @@ class Viddler():
     def downloadVideo(self, video):
         """Download a video from a json object"""
         for _file in video['files']:
-            if _file['profile_name'] == "Source" and _file['status']=='ready':
-                self.makePublic(video['id'])
-                dest = os.path.join(self.save_dir, video['id']+'.'+_file['ext'])
-                try:
-                    result = requests.get(_file['url'], stream=True)
-                except:
-                    raise
-                try:
-                    result.raise_for_status()
-                except requests.exceptions.HTTPError:
-                    self.authenticate()
+            if _file['profile_name'] == "Source":
+                if _file['status']=='ready':
+				    self.makePublic(video['id'])
+					dest = os.path.join(self.save_dir, video['id']+'.'+_file['ext'])
+					try:
+						result = requests.get(_file['url'], stream=True)
+					except:
+						raise
+					try:
+						result.raise_for_status()
+					except requests.exceptions.HTTPError:
+						self.authenticate()
 
-                with open(dest, 'wb') as f:
-                    for chunk in result.iter_content(chunk_size=1024):
-                        if chunk:
-                            f.write(chunk)
-                self.makePrivate(video['id'])
-                self.saveVideoMeta(video)
-                self.writeProgress(video['id'], 'complete')
-                return True
+					with open(dest, 'wb') as f:
+						for chunk in result.iter_content(chunk_size=1024):
+							if chunk:
+								f.write(chunk)
+					self.makePrivate(video['id'])
+					self.saveVideoMeta(video)
+					self.writeProgress(video['id'], 'complete')
+					return True
+				else:
+					return False
     
     def downloadThumb(self, video):
         """Download thumbnail image for the video"""

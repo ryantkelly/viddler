@@ -1,4 +1,4 @@
-import requests, json, os, pprint, csv, datetime
+import requests, json, os, csv, datetime, re, codecs
 from furl import furl
 import sys
 class Viddler():
@@ -8,21 +8,34 @@ class Viddler():
     auth_file = 'auth.json'
     meta_file = 'video_info.csv'
     progress_file = 'progress.json'
+    regex = re.compile('[/.*\':?|#]')
 
     def __init__(self, api_key, user, password, save_dir):
         self.api_key = api_key
         self.save_dir = save_dir
         self.user = user
         self.password = password
-        if not os.path.isdir(self.save_dir):
+
+        if not os.path.isdir(self.save_dir): # create save dir
             os.makedirs(self.save_dir)
 
-        if os.path.isfile(self.auth_file):
+        self.video_dir = os.path.join(self.save_dir, 'videos')
+        if not os.path.isdir(self.video_dir): # create video dir
+            os.makedirs(self.video_dir)
+
+        self.thumb_dir = os.path.join(self.save_dir, 'thumbs') # create thumbs dir
+        if not os.path.isdir(self.thumb_dir):
+            os.makedirs(self.thumb_dir)
+
+        if os.path.isfile(self.auth_file): #create or read auth file
             self.auth = json.load(open(self.auth_file))
         else:
-            self.authenticate()
+            try:
+                self.authenticate()
+            except:
+                raise
 
-        if os.path.isfile(self.video_file):
+        if os.path.isfile(self.video_file): #create or read videos file
             self.videos = json.load(open(self.video_file))
         else:
             self.videos = self.getVideos()
@@ -121,60 +134,58 @@ class Viddler():
         try:
             with open(self.progress_file, 'r+') as f:
                 d = json.loads(f.read())
-                d.append({_id: status})
+                try:
+                    d[status].append(_id)
+                except KeyError:
+                    d[status] = [_id]
             with open(self.progress_file, 'w') as f:
                 f.write(json.dumps(d))
+
         except FileNotFoundError:
             with open(self.progress_file, 'w') as f:
-                d = [{_id: status}]
+                d = {}
+                d[status] = [_id]
                 f.write(json.dumps(d))
     
-    def loadComplete(self):
-        """Loads complete files into a list"""
+    def loadProgress(self):
+        """Loads progress file"""
         try:
             d = json.load(open(self.progress_file, 'r'))
         except:
             raise
-        l = []
-        for p in d:
-            if list(p.values())[0]  == 'complete':
-                l.append(list(p.keys())[0])
-        return l
+        return(d)
 
     def downloadVideo(self, video):
         """Download a video from a json object"""
         for _file in video['files']:
             if _file['profile_name'] == "Source":
-            if _file['status']=='ready':
-                self.makePublic(video['id'])
-                dest = os.path.join(self.save_dir, video['id']+'.'+_file['ext'])
-                try:
-                    result = requests.get(_file['url'], stream=True)
-                except:
-                    raise
-                try:
-                    result.raise_for_status()
-                except requests.exceptions.HTTPError:
-                    self.authenticate()
+                if _file['status']=='ready':
+                    self.makePublic(video['id'])
+                    dest = os.path.join(self.video_dir, self.regex.sub('', video['title'])+'.'+_file['ext'])
+                    try:
+                        result = requests.get(_file['url'], stream=True)
+                    except:
+                        raise
+                    try:
+                        result.raise_for_status()
+                    except requests.exceptions.HTTPError:
+                        self.authenticate()
 
-                with open(dest, 'wb') as f:
-                    for chunk in result.iter_content(chunk_size=1024):
-                        if chunk:
-                            f.write(chunk)
-                self.makePrivate(video['id'])
-                self.saveVideoMeta(video)
-                self.writeProgress(video['id'], 'complete')
-                return True
-            else:
-                return False
+                    with open(dest, 'wb') as f:
+                        for chunk in result.iter_content(chunk_size=1024):
+                            if chunk:
+                                f.write(chunk)
+                    self.downloadThumb(video)
+                    self.makePrivate(video['id'])
+                    self.saveVideoMeta(video)
+                    self.writeProgress(video['id'], 'complete')
+                    return True
+                else:
+                    return False
     
     def downloadThumb(self, video):
         """Download thumbnail image for the video"""
-        thumb_dir = os.path.join(self.save_dir, 'thumbs')
-        if not os.path.isdir(thumb_dir):
-            os.makedirs(thumb_dir)
-        
-        dest = os.path.join(thumb_dir, video['id']+'.jpg')
+        dest = os.path.join(self.thumb_dir, self.regex.sub('', video['title'])+'.jpg')
         try:
             result = requests.get(video["thumbnail_url"])
         except:
@@ -192,7 +203,7 @@ class Viddler():
         if not os.path.isfile(dest):
             with open(dest, 'w') as f:
                 writer = csv.writer(f)
-                writer.writerow(['Video ID', 'Directory', 'Filename', 'Title', 'Description', 'Published', 'View Count','Impression Count'])
+                writer.writerow(['Video ID', 'Thumb', 'Location', 'Title', 'Description', 'Published', 'View Count','Impression Count'])
         
         for _file in video['files']:
             if _file['profile_name'] == "Source":
@@ -200,7 +211,56 @@ class Viddler():
         pub = datetime.datetime.fromtimestamp(int(video['made_public_time'])).strftime('%Y-%m-%d %H:%M:%S')
         with open(dest, 'a') as f:
             writer = csv.writer(f)
-            writer.writerow([video['id'], self.save_dir, video['id']+'.'+_file['ext'], video['title'], video['description'], pub, video['view_count'], video['impression_count']])
+            writer.writerow(
+                [video['id'],
+                os.path.join('thumbs', self.regex.sub('', video['title'])+'.jpg'), 
+                os.path.join(self.video_dir, self.regex.sub('', video['title'])+'.'+_file['ext']),
+                video['title'], 
+                video['description'], 
+                pub, 
+                video['view_count'], 
+                video['impression_count']])
 
-    def makeWebpage(self):
+    def makeWebpage(self, file_name):
         """Make a web page to browse downloaded videos"""
+        
+        # Download Bootstrap CSS for table
+        try:
+            result = requests.get("https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-beta.3/css/bootstrap.min.css") 
+            # Yes, this is hard coded. I should probably grab from GitHub. And I'm also sure there's a better way to do this.
+        except:
+            raise
+        with open(os.path.join(self.save_dir, 'bootstrap.min.css'), 'w') as f:
+            f.write(result.text) 
+        f = open(os.path.join(self.save_dir, file_name), 'w')
+        f.write("""
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Viddler Archive</title>
+                <link href="bootstrap.min.css" rel="stylesheet">
+            </head>
+            <body>
+            <table class="table table-striped table-hover">""")
+
+        with codecs.open(os.path.join(self.save_dir, self.meta_file), "r",encoding='utf-8', errors='ignore') as csvfile:
+            reader = csv.reader(csvfile, dialect="excel")
+            count = 0
+            for row in reader:
+                if count == 0:
+                    f.write('<thead class="thead-default"><tr>')
+                    for c in row:
+                        f.write("<th>"+c+"</th>")
+                    f.write("</thead></tr>")
+                else:
+                    f.write("<tr>")
+                    for i, c in enumerate(row):
+                        if i==1: #Thumb image
+                            s = '<img class="img-thumbnail" src="'+c+'"/>'
+                        else:
+                            s = c
+                        f.write("<td>"+s+"</td>")
+                    f.write("</tr>")
+                count+=1
+        f.write("</table></body></html>")
